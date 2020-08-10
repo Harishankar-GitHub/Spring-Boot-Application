@@ -1,0 +1,106 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.surveyapplication</groupId>
+  <artifactId>Survey-Application</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <name>Survey Application</name>
+  
+  <parent>
+  <!-- This dependency is used to manage versions of dependencies. If this is used, we need not specify
+  the versions of dependencies. -->
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>2.3.1.RELEASE</version>
+  </parent>
+  
+  <properties>
+		<java.version>1.8</java.version>
+	</properties>
+  
+  <dependencies>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		
+		<!-- Commenting the above starter web dependency and customizing it to exclude default Tomcat server and add Jetty -->
+		<!-- <dependency>
+		    <groupId>org.springframework.boot</groupId>
+		    <artifactId>spring-boot-starter-web</artifactId>
+		    <exclusions>
+		        <exclusion>
+		            <groupId>org.springframework.boot</groupId>
+		            <artifactId>spring-boot-starter-tomcat</artifactId>
+		        </exclusion>
+		    </exclusions>
+		</dependency>
+		<dependency>
+		    <groupId>org.springframework.boot</groupId>
+		    <artifactId>spring-boot-starter-jetty</artifactId>
+		</dependency> -->
+		
+		<dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-rest</artifactId>
+        </dependency>
+        
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+        </dependency>
+        
+        <dependency>	<!-- Default user name : user -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        
+        <dependency>    
+		    <groupId>org.springframework.security</groupId>    
+		    <artifactId>spring-security-test</artifactId>    
+		    <scope>test</scope>
+		</dependency>
+		
+		<dependency>	<!-- Added this to return the response in XML Format -->
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-xml</artifactId>
+        </dependency>
+		
+		 <dependency>
+            <groupId>org.springframework.boot</groupId>					
+            <artifactId>spring-boot-devtools</artifactId>						<!-- To enable live reload, fast boot up etc. -->
+            <optional>true</optional>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        																								<!-- Adding Actuator and HAL Browser to monitor application -->
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <!--  <artifactId>spring-data-rest-hal-browser</artifactId> -->	<!-- This is deprecated -->
+            <artifactId>spring-data-rest-hal-explorer</artifactId>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>		<!-- We keep the scope to test because, this dependency need not be available in production environment -->
+        </dependency>
+	</dependencies>
+	
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+	
+</project>

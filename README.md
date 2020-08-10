@@ -22,3 +22,23 @@
 ###### Disadvantages of using Stubs
 ###### Mockito Annotations - @Mock, @InjectMocks, @ExtendWith
 ###### Mockito Argument Matchers - Mockito.anyInt(), Mockito.anyLong(), Mockito.anyMap() etc.
+
+### 3. Survey Application - Spring Boot with a simple API
+
+###### Exploring GET, POST, PUT, PATCH, DELETE
+###### Request & Response in JSON and XML format
+###### JSON View plug-in
+###### Monitoring Spring Boot application using Actuator and HAL Browser
+###### Embedded Servers - Tomcat, Jetty, Undertow
+###### Configuring different port numbers
+###### Adding Dynamic Configuration to the application : YAML & More..
+###### Basics of profiles
+###### Type Safe configuration properties
+###### Spring Data JPA with CommandLineRunner
+###### Exploring In Memory Database - H2 Console
+###### Spring Data Rest - PagingAndSortingRepository
+###### Spring Boot Integration Test
+###### Unit Tests with Spring Boot and Mockito - MockMvc Framework
+###### Different between Unit Test and Integration Test
+###### Basic Authentication with Spring Security - Custom password, Different roles etc.
+
