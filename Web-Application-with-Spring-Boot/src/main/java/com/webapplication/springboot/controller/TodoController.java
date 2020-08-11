@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.webapplication.springboot.model.Todo;
+import com.webapplication.springboot.service.TodoRepository;
 import com.webapplication.springboot.service.TodoService;
 
 @Controller
@@ -24,6 +25,9 @@ public class TodoController
 {
 	@Autowired
 	TodoService todoService;
+	
+	@Autowired
+	private TodoRepository repository;
 	
 	@InitBinder
 	protected void initBinder(WebDataBinder binder) {
@@ -38,7 +42,10 @@ public class TodoController
 //		model.put("todos", todoService.retrieveTodos("in28Minutes"));
 		// Instead of using hard coded name to retrieve todos, I can fetch the name from session.
 		String name = getLoggedInUserName(model);
-		model.put("todos", todoService.retrieveTodos(name));
+		
+		model.put("todos", repository.findByUser(name));
+		
+//		model.put("todos", todoService.retrieveTodos(name));
 		return "list-todos";	// returns list-todos.jsp
 	}
 
@@ -58,27 +65,29 @@ public class TodoController
 	@RequestMapping(value = "/add-todo", method = RequestMethod.GET)	// http://localhost:8080/add-todo
 	public String showAddTodo(ModelMap model)
 	{
-		model.addAttribute("todo", new Todo(0, getLoggedInUserName(model), "", new Date(), false));
+		model.addAttribute("todo", new Todo(0, getLoggedInUserName(model), "Default Desc", new Date(), false));
 		return "todo";	// returns add-todo.jsp
 	}
 	
 	@RequestMapping(value = "/delete-todo", method = RequestMethod.GET)	// http://localhost:8080/add-todo
 	public String deleteTodo(@RequestParam int id)
 	{
-		if (id == 4)
+		if (id == 1)
 		{
 			throw new RuntimeException("Throwing Runtime Exception");
 		}
 		// Above condition is to demonstrate error page.
 		
-		todoService.deleteTodo(id);
+		repository.deleteById(id);
+//		todoService.deleteTodo(id);
 		return "redirect:/list-todos";
 	}
 	
 	@RequestMapping(value = "/update-todo", method = RequestMethod.GET)	// http://localhost:8080/add-todo
 	public String showUpdateTodoPage(@RequestParam int id, ModelMap model)
 	{
-		Todo todo = todoService.retrieveTodo(id);
+		Todo todo = repository.findById(id).get();
+//		Todo todo = todoService.retrieveTodo(id);
 		model.put("todo", todo);
 		return "todo";
 	}
@@ -92,7 +101,8 @@ public class TodoController
 		}
 		
 		todo.setUser(getLoggedInUserName(model));
-		todoService.updateTodo(todo);
+		repository.save(todo);
+//		todoService.updateTodo(todo);
 		return "redirect:/list-todos";
 	}
 	
@@ -103,8 +113,13 @@ public class TodoController
 		{
 			return "todo";
 		}
-		String name = getLoggedInUserName(model);
-		todoService.addTodo(name, todo.getDesc(), todo.getTargetDate(), false);
+		
+		todo.setUser(getLoggedInUserName(model));
+		repository.save(todo);
+		
+		// String name = getLoggedInUserName(model);
+		//todoService.addTodo(name, todo.getDesc(), todo.getTargetDate(), false);
+		
 		return "redirect:/list-todos";
 	}
 }

@@ -16,6 +16,8 @@
 ###### Spring Security
 ###### Logout Functionality
 ###### Exception Handling
+###### Connecting Web Application with JPA
+###### Database : In Memory Database (H2 Console)
 
 ### 2. Implementation of Mockito Framework
 
