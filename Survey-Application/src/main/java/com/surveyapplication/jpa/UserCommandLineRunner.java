@@ -7,8 +7,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 @Component
-public class UserCommandLineRunner implements CommandLineRunner
-{
+public class UserCommandLineRunner implements CommandLineRunner {
 	
 	// CommandLineRunner is executed when the Application is started.
 	
@@ -32,14 +31,12 @@ public class UserCommandLineRunner implements CommandLineRunner
         // There are several other methods like save(), saveAll(), count(), findById(), delete() etc.
         
         logger.info("All users :");
-        for (User user : repository.findAll())
-        {
+        for (User user : repository.findAll()) {
         	logger.info(user.toString());
         }
         
         logger.info("Admin users :");
-        for (User user : repository.findByRole("Admin"))
-        {
+        for (User user : repository.findByRole("Admin")) {
         	logger.info(user.toString());
         }
 	}

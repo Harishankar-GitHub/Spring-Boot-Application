@@ -1,10 +1,10 @@
 package com.surveyapplication.jpa;
 
-import java.util.List;
-
 import org.springframework.data.repository.PagingAndSortingRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.rest.core.annotation.RepositoryRestResource;
+
+import java.util.List;
 
 @RepositoryRestResource(collectionResourceRel = "users", path = "users")
 // By using above annotation, UserRestRepository is exposed to "http://localhost:8080/users" - GET request.
@@ -33,12 +33,12 @@ import org.springframework.data.rest.core.annotation.RepositoryRestResource;
 // next, prev, last page etc.
 // Those additional links are known as HATEOAS
 // HATEOAS - Hypermedia As Representation Of Application State
+// HATEOAS - Hypermedia As The Engine Of Application State
 
 // We can do a sort and retrieve
 // GET - http://localhost:8080/users/?sort=name,desc
 
-public interface UserRestRepository extends PagingAndSortingRepository<User, Long>
-{
+public interface UserRestRepository extends PagingAndSortingRepository<User, Long> {
 	// If we need to expose a method, we can do it using @Param annotation.
 	// http://localhost:8080/users/search/findByRole?role=Admin
 	List<User> findByRole(@Param("role") String role);

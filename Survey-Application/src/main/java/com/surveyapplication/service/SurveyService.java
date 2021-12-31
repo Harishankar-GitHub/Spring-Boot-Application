@@ -1,17 +1,20 @@
 package com.surveyapplication.service;
 
+import com.surveyapplication.model.Question;
+import com.surveyapplication.model.Survey;
+import org.springframework.stereotype.Component;
+
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import org.springframework.stereotype.Component;
-import com.surveyapplication.model.Question;
-import com.surveyapplication.model.Survey;
 
 @Component
 public class SurveyService {
+
 	private static List<Survey> surveys = new ArrayList<>();
+
 	static {
 		Question question1 = new Question("Question1",
 				"Largest Country in the World", "Russia", Arrays.asList(
@@ -79,7 +82,7 @@ public class SurveyService {
 		return null;
 	}
 
-	private SecureRandom random = new SecureRandom();
+	private final SecureRandom random = new SecureRandom();
 
 	public Question addQuestion(String surveyId, Question question) {
 		Survey survey = retrieveSurvey(surveyId);

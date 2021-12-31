@@ -1,11 +1,10 @@
 package com.surveyapplication.jpa;
 
-import java.util.List;
-
 import org.springframework.data.repository.CrudRepository;
 
-public interface UserRepository extends CrudRepository<User, Long>
-{
+import java.util.List;
+
+public interface UserRepository extends CrudRepository<User, Long> {
 	
 	// Spring Data JPA Reference Documentation : https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#reference
 	

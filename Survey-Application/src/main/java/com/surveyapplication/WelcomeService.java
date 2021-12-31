@@ -4,8 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
-public class WelcomeService
-{
+public class WelcomeService {
 	
 	@Value("${welcome.message}")
 	// @Value annotation autowires a property from application.properties file and 

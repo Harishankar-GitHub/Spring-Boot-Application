@@ -1,7 +1,13 @@
 package com.surveyapplication.model;
 
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
 import java.util.List;
 
+@Getter @Setter
+@ToString
 public class Question
 {
 	private String id;
@@ -14,45 +20,15 @@ public class Question
 	// no suitable constructor found, can not deserialize from Object value
 	// (missing default constructor or creator, or perhaps need to add/enable
 	// type information?)
-	public Question()
-	{
-
+	public Question() {
 	}
 
-	public Question(String id, String description, String correctAnswer, List<String> options)
-	{
+	public Question(String id, String description, String correctAnswer, List<String> options) {
 		super();
 		this.id = id;
 		this.description = description;
 		this.correctAnswer = correctAnswer;
 		this.options = options;
-	}
-
-	public String getId() {
-		return id;
-	}
-
-	public void setId(String id) {
-		this.id = id;
-	}
-
-	public String getDescription() {
-		return description;
-	}
-
-	public String getCorrectAnswer() {
-		return correctAnswer;
-	}
-
-	public List<String> getOptions() {
-		return options;
-	}
-
-	@Override
-	public String toString() {
-		return String
-				.format("Question [id=%s, description=%s, correctAnswer=%s, options=%s]",
-						id, description, correctAnswer, options);
 	}
 
 	@Override

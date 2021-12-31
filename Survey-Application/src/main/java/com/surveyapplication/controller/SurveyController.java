@@ -1,8 +1,8 @@
 package com.surveyapplication.controller;
 
-import java.net.URI;
-import java.util.List;
-
+import com.surveyapplication.model.Question;
+import com.surveyapplication.model.Survey;
+import com.surveyapplication.service.SurveyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,34 +12,29 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import com.surveyapplication.model.Question;
-import com.surveyapplication.model.Survey;
-import com.surveyapplication.service.SurveyService;
-
+import java.net.URI;
+import java.util.List;
 
 @RestController
-public class SurveyController
-{
+public class SurveyController {
+
 	@Autowired
 	private SurveyService surveyService;
 	
 	// Get all questions from a survey
 	// http://localhost:8080/surveys/Survey1/questions
 	@GetMapping("/surveys/{surveyId}/questions")
-	public List<Question> retrieveQuestionsForSurvey(@PathVariable String surveyId)
-	{
+	public List<Question> retrieveQuestionsForSurvey(@PathVariable String surveyId) {
 		return surveyService.retrieveQuestions(surveyId);
 	}
 	
 	// Add a question to a survey
 	// http://localhost:8080/surveys/Survey1/questions
 	@PostMapping("/surveys/{surveyId}/questions")
-	public ResponseEntity<Void> addQuestionToSurvey(@PathVariable String surveyId, @RequestBody Question newQuestion)
-	{
+	public ResponseEntity<Void> addQuestionToSurvey(@PathVariable String surveyId, @RequestBody Question newQuestion) {
 		Question questionThatWasAdded = surveyService.addQuestion(surveyId, newQuestion);
 		
-		if (questionThatWasAdded == null)
-		{
+		if (questionThatWasAdded == null) {
             return ResponseEntity.noContent().build();
         }
 
@@ -57,16 +52,14 @@ public class SurveyController
 	// Get a question from a survey
 	// http://localhost:8080/surveys/Survey1/questions/Question2
 	@GetMapping("/surveys/{surveyId}/questions/{questionId}")
-	public Question retrieveDetailsForAQuestion(@PathVariable String surveyId, @PathVariable String questionId)
-	{
+	public Question retrieveDetailsForAQuestion(@PathVariable String surveyId, @PathVariable String questionId) {
 		return surveyService.retrieveQuestion(surveyId, questionId);
 	}
 	
 	// Get all surveys
 	// http://localhost:8080/surveys
 	@GetMapping("/surveys")
-	public List<Survey> getAllSurveys()
-	{
+	public List<Survey> getAllSurveys() {
 		return surveyService.retrieveAllSurveys();
 	}
 }

@@ -1,13 +1,9 @@
 package com.surveyapplication.controller;
 
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.when;
-
-import java.util.Arrays;
-import java.util.List;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import com.surveyapplication.model.Question;
+import com.surveyapplication.service.SurveyService;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
 import org.skyscreamer.jsonassert.JSONAssert;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,16 +14,18 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.RequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import com.surveyapplication.model.Question;
-import com.surveyapplication.service.SurveyService;
 
-@RunWith(SpringRunner.class)
-// The above annotation is to Initialize and Launch Spring Boot Application
+import java.util.Arrays;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+@ExtendWith(SpringExtension.class)
+// The above annotation is to create the mocks and inject it to the test context.
 @WebMvcTest(value = SurveyController.class)
 // By using the above annotation, we launch the application only with the specified class. Rest of the classes or end points will not be mapped.
 @WithMockUser
@@ -35,10 +33,10 @@ import com.surveyapplication.service.SurveyService;
 // We disable Spring Security here because, in Unit Test, we test a particular functionality. 
 // We need not test Spring Security here.
 // So, we use @WithMockUser to by pass the Spring Security.
-public class SurveyControllerTest
+public class SurveyControllerTest {
 // The name of JUnit Test File is ClassName+Test
 // This is the naming convention for Unit Testing.
-{
+
 	@Autowired
 	private MockMvc mockMvc;
 	// MockMvc is provided by @WebMvcTest annotation
@@ -47,8 +45,7 @@ public class SurveyControllerTest
 	private SurveyService surveyService;
 	
 	@Test
-	public void retrieveDetailsForQuestion() throws Exception
-	{
+	public void retrieveDetailsForQuestion() throws Exception {
 		Question mockQuestion = new Question("Question1",
 				"Largest Country in the World", "Russia", Arrays.asList(
 						"India", "Russia", "United States", "China"));
@@ -70,8 +67,7 @@ public class SurveyControllerTest
 	}
 	
 	@Test
-	public void createSurveyQuestion() throws Exception
-	{
+	public void createSurveyQuestion() throws Exception {
 		Question mockQuestion = new Question("1", "Smallest Number", "1", Arrays.asList("1", "2", "3", "4"));
 		
 		String questionJson = "{\"description\":\"Smallest Number\",\"correctAnswer\":\"1\",\"options\":[\"1\",\"2\",\"3\",\"4\"]}";
