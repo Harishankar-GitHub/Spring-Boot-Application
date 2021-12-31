@@ -13,8 +13,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 // or other controllers.
 // If I want value of name in TodoController, I can use the same annotation there @SessionAttributes("name").
 // To get the value, I use model.get("name").
-public class WelcomeController
-{
+public class WelcomeController {
 	
 	// Main concepts of Spring are :
 	// 1. Component Scan - Finds all the components needed, injects where ever needed and manages
@@ -53,8 +52,7 @@ public class WelcomeController
 //	}
 	
 	@RequestMapping(value = "/", method = RequestMethod.GET)	// http://localhost:8080/login
-	public String showWelcomePage(ModelMap model)
-	{
+	public String showWelcomePage(ModelMap model) {
 		model.put("name", getLoggedInUserName(model));
 		return "welcome";	// returns welcome.jsp
 	}

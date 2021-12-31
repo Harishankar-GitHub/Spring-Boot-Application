@@ -11,5 +11,4 @@ public class WebApplicationWithSpringBootApplication {
 		SpringApplication.run(WebApplicationWithSpringBootApplication.class, args);
 		// SpringApplication.run launches a Spring Boot Application
 	}
-
 }

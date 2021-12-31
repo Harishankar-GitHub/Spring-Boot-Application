@@ -9,13 +9,12 @@ import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 
 @Configuration
 //  @Configuration is a Spring Annotation which helps us to add configurations.
-public class SecurityConfiguration extends WebSecurityConfigurerAdapter{
+public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
 // We have to extend WebSecurityConfigurerAdapter class and override its methods to add our
 // configuration
 	
 	@Autowired
-    public void configureGlobalSecurity(AuthenticationManagerBuilder auth) throws Exception
-	{
+    public void configureGlobalSecurity(AuthenticationManagerBuilder auth) throws Exception {
         auth.inMemoryAuthentication()
             .passwordEncoder(NoOpPasswordEncoder.getInstance())
         		.withUser("Harish").password("encapsulation")
@@ -23,8 +22,7 @@ public class SecurityConfiguration extends WebSecurityConfigurerAdapter{
     }
 	
 	@Override
-    protected void configure(HttpSecurity http) throws Exception
-	{
+    protected void configure(HttpSecurity http) throws Exception {
         http.authorizeRequests().antMatchers("/login", "/h2-console/**").permitAll()
                 .antMatchers("/", "/*todo*/**").access("hasRole('USER')").and()
                 .formLogin();

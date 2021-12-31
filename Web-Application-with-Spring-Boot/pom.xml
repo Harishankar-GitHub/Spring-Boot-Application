@@ -59,7 +59,9 @@
 		<dependency> <!-- This dependency is added to enable jsp support in embedded tomcat server -->
             <groupId>org.apache.tomcat.embed</groupId>
             <artifactId>tomcat-embed-jasper</artifactId>
-            <scope>provided</scope>
+<!--            <scope>provided</scope>-->
+			<!-- It was working fine before. But suddenly stopped working.
+			 Now works fine after commenting the scope -->
         </dependency>
         
         <dependency>    

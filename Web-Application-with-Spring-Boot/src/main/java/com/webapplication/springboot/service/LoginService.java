@@ -9,10 +9,8 @@ import org.springframework.stereotype.Component;
 // The entire life cycle of that bean will be managed by Spring
 // To use this in controller, we use @Autowired in controller.
 @Component
-public class LoginService
-{	
-	public boolean validateUser(String user, String password)
-	{
+public class LoginService {
+	public boolean validateUser(String user, String password) {
         return user.equalsIgnoreCase("harish") && password.equals("encapsulation");
     }
 }

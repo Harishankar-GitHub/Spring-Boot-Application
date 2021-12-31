@@ -1,8 +1,8 @@
 package com.webapplication.springboot.controller;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import javax.validation.Valid;
+import com.webapplication.springboot.model.Todo;
+import com.webapplication.springboot.service.TodoRepository;
+import com.webapplication.springboot.service.TodoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.propertyeditors.CustomDateEditor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -15,14 +15,15 @@ import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
-import com.webapplication.springboot.model.Todo;
-import com.webapplication.springboot.service.TodoRepository;
-import com.webapplication.springboot.service.TodoService;
+
+import javax.validation.Valid;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 @Controller
 //@SessionAttributes("name")
-public class TodoController
-{
+public class TodoController {
+
 	@Autowired
 	TodoService todoService;
 	
@@ -37,8 +38,7 @@ public class TodoController
 	}
 
 	@RequestMapping(value = "/list-todos", method = RequestMethod.GET)	// http://localhost:8080/list-todos
-	public String showTodos(ModelMap model)
-	{
+	public String showTodos(ModelMap model) {
 //		model.put("todos", todoService.retrieveTodos("in28Minutes"));
 		// Instead of using hard coded name to retrieve todos, I can fetch the name from session.
 		String name = getLoggedInUserName(model);
@@ -63,17 +63,14 @@ public class TodoController
 	}
 	
 	@RequestMapping(value = "/add-todo", method = RequestMethod.GET)	// http://localhost:8080/add-todo
-	public String showAddTodo(ModelMap model)
-	{
+	public String showAddTodo(ModelMap model) {
 		model.addAttribute("todo", new Todo(0, getLoggedInUserName(model), "Default Desc", new Date(), false));
 		return "todo";	// returns add-todo.jsp
 	}
 	
 	@RequestMapping(value = "/delete-todo", method = RequestMethod.GET)	// http://localhost:8080/add-todo
-	public String deleteTodo(@RequestParam int id)
-	{
-		if (id == 1)
-		{
+	public String deleteTodo(@RequestParam int id) {
+		if (id == 1) {
 			throw new RuntimeException("Throwing Runtime Exception");
 		}
 		// Above condition is to demonstrate error page.
@@ -84,8 +81,7 @@ public class TodoController
 	}
 	
 	@RequestMapping(value = "/update-todo", method = RequestMethod.GET)	// http://localhost:8080/add-todo
-	public String showUpdateTodoPage(@RequestParam int id, ModelMap model)
-	{
+	public String showUpdateTodoPage(@RequestParam int id, ModelMap model) {
 		Todo todo = repository.findById(id).get();
 //		Todo todo = todoService.retrieveTodo(id);
 		model.put("todo", todo);
@@ -93,10 +89,8 @@ public class TodoController
 	}
 	
 	@RequestMapping(value = "/update-todo", method = RequestMethod.POST)	// http://localhost:8080/add-todo
-	public String updateTodo(ModelMap model, @Valid Todo todo, BindingResult result)
-	{
-		if (result.hasErrors())
-		{
+	public String updateTodo(ModelMap model, @Valid Todo todo, BindingResult result) {
+		if (result.hasErrors()) {
 			return "todo";
 		}
 		
@@ -107,10 +101,8 @@ public class TodoController
 	}
 	
 	@RequestMapping(value = "/add-todo", method = RequestMethod.POST)	// http://localhost:8080/add-todo
-	public String addTodo(ModelMap model, @Valid Todo todo, BindingResult result)
-	{
-		if (result.hasErrors())
-		{
+	public String addTodo(ModelMap model, @Valid Todo todo, BindingResult result) {
+		if (result.hasErrors()) {
 			return "todo";
 		}
 		
