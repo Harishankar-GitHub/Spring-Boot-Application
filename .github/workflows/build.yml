@@ -181,12 +181,12 @@ jobs:
           const puppeteer = require('puppeteer');
           const BASE = 'http://localhost:8080';
           let stage = 'starting the browser';
+          const trail = [];  // recent network activity, reported if the check crashes
           (async () => {
             const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
             const browserVersion = await browser.version();
             const page = await browser.newPage();
             const problems = [];
-            const trail = [];  // recent network activity, reported if the check crashes
             let watching = false;  // only report problems once logged in
             // Spring Security's built-in login page links CSS from external CDNs; only load the app's own resources
             await page.setRequestInterception(true);
@@ -237,6 +237,8 @@ jobs:
             if (!/^\d{2}\/\d{2}\/\d{4}$/.test(picked)) problems.push(`Unexpected date value '${picked}'`);
 
             stage = 'submitting the todo form';
+            await page.click('#desc');  // clicking elsewhere closes the date picker, which otherwise covers the Add button
+            await page.waitForSelector('.datepicker', { hidden: true, timeout: 5000 }).catch(() => problems.push('Date picker did not close'));
             await page.$eval('#desc', el => { el.value = ''; });
             await page.type('#desc', 'Added through the browser check');
             await Promise.all([page.waitForNavigation(), page.click('button[type=submit]')]);
