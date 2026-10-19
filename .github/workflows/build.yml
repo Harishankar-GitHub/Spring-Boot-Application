@@ -13,16 +13,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 jobs:
   mockito:
     name: Mockito
     runs-on: ubuntu-latest
     defaults:
       run:
+        shell: bash  # bash -eo pipefail, so a failing build piped through tee fails the step
         working-directory: Mockito
     steps:
       - uses: actions/checkout@v5
@@ -49,6 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
+        shell: bash  # bash -eo pipefail, so a failing build piped through tee fails the step
         working-directory: Survey-Application
     steps:
       - uses: actions/checkout@v5
@@ -118,6 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
+        shell: bash  # bash -eo pipefail, so a failing build piped through tee fails the step
         working-directory: Web-Application-with-Spring-Boot
     steps:
       - uses: actions/checkout@v5
