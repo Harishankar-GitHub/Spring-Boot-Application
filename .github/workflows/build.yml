@@ -37,7 +37,7 @@ jobs:
         run: |
           for f in build.log app.log; do
             [ -f "$f" ] || continue
-            msg=$(grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" | grep -vE 'DEBUG|TRACE' | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
+            msg=$( { grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" || true; } | { grep -vE 'DEBUG|TRACE' || true; } | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
             if [ -n "$msg" ]; then echo "::error title=$f::$msg"; fi
           done
 
@@ -75,7 +75,7 @@ jobs:
           check() {  # name, expected status, expected text ('' for none), curl args...
             local name=$1 want=$2 text=$3; shift 3
             local body; body=$(mktemp)
-            local got; got=$(curl -s -o "$body" -w '%{http_code}' "$@")
+            local got; got=$(curl -s -o "$body" -w '%{http_code}' "$@") || true  # e.g. connection refused -> 000
             if [ "$got" = "$want" ] && { [ -z "$text" ] || grep -qF -- "$text" "$body"; }; then
               echo "PASS  $name"; pass=$((pass + 1))
             else
@@ -103,7 +103,7 @@ jobs:
         run: |
           for f in build.log app.log; do
             [ -f "$f" ] || continue
-            msg=$(grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" | grep -vE 'DEBUG|TRACE' | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
+            msg=$( { grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" || true; } | { grep -vE 'DEBUG|TRACE' || true; } | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
             if [ -n "$msg" ]; then echo "::error title=$f::$msg"; fi
           done
 
@@ -145,7 +145,7 @@ jobs:
           check() {  # name, expected status, expected text ('' for none), curl args...
             local name=$1 want=$2 text=$3; shift 3
             local body; body=$(mktemp)
-            local got; got=$(curl -s -o "$body" -w '%{http_code}' "$@")
+            local got; got=$(curl -s -o "$body" -w '%{http_code}' "$@") || true  # e.g. connection refused -> 000
             if [ "$got" = "$want" ] && { [ -z "$text" ] || grep -qF -- "$text" "$body"; }; then
               echo "PASS  $name"; pass=$((pass + 1))
             else
@@ -175,15 +175,15 @@ jobs:
       - name: Browser check (jQuery, Bootstrap, date picker)
         working-directory: ${{ runner.temp }}
         run: |
-          CHROME_PATH=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)
-          export CHROME_PATH
-          npm install --no-save --silent puppeteer-core@24 > /dev/null
+          # puppeteer downloads its own Chrome, so this doesn't depend on what the runner image ships
+          npm install --no-save --no-audit --no-fund puppeteer@24 || { echo "::error::npm install puppeteer failed"; exit 1; }
           cat > ui-check.js <<'EOF'
-          const puppeteer = require('puppeteer-core');
+          const puppeteer = require('puppeteer');
           const BASE = 'http://localhost:8080';
           let stage = 'starting the browser';
           (async () => {
-            const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, args: ['--no-sandbox'] });
+            const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+            const browserVersion = await browser.version();
             const page = await browser.newPage();
             const problems = [];
             const trail = [];  // recent network activity, reported if the check crashes
@@ -244,7 +244,7 @@ jobs:
 
             await browser.close();
             if (problems.length) { problems.forEach(p => console.log(`::error::${p}`)); process.exit(1); }
-            console.log(`::notice title=Browser check::jQuery ${info.jquery}, Bootstrap ${info.bootstrap}, CSS applied, date picker picked ${picked}, todo added through the form`);
+            console.log(`::notice title=Browser check (${browserVersion})::jQuery ${info.jquery}, Bootstrap ${info.bootstrap}, CSS applied, date picker picked ${picked}, todo added through the form`);
           })().catch(e => {
             console.log(`::error title=Browser check crashed while ${stage}::${e.message}%0A${trail.slice(-15).join('%0A')}`);
             process.exit(1);
@@ -257,7 +257,7 @@ jobs:
         run: |
           for f in build.log app.log; do
             [ -f "$f" ] || continue
-            msg=$(grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" | grep -vE 'DEBUG|TRACE' | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
+            msg=$( { grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" || true; } | { grep -vE 'DEBUG|TRACE' || true; } | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
             if [ -n "$msg" ]; then echo "::error title=$f::$msg"; fi
           done
 
