@@ -1,0 +1,285 @@
+name: Build and test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mockito:
+    name: Mockito
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash  # bash -eo pipefail, so a failing build piped through tee fails the step
+        working-directory: Mockito
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: maven
+
+      - name: Build and run tests
+        run: |
+          mvn -B -ntp verify 2>&1 | tee build.log
+          total=$( { grep -E '^\[(INFO|WARNING|ERROR)\] Tests run: .*Skipped: [0-9]+$' build.log || true; } | tail -1 | sed -E 's/^\[[A-Z]+\] //')
+          classes=$( { grep -oE 'Tests run: .* - in [A-Za-z0-9_.]+' build.log || true; } | sed -E 's/.*\.//' | sort -u | paste -sd, - | sed 's/,/, /g')
+          echo "::notice title=Mockito tests::$total ($classes)"
+
+      - name: Report errors
+        if: failure()
+        run: |
+          for f in build.log app.log; do
+            [ -f "$f" ] || continue
+            msg=$( { grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" || true; } | { grep -vE 'DEBUG|TRACE' || true; } | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
+            if [ -n "$msg" ]; then echo "::error title=$f::$msg"; fi
+          done
+
+  survey-application:
+    name: Survey Application
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash  # bash -eo pipefail, so a failing build piped through tee fails the step
+        working-directory: Survey-Application
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: maven
+
+      # SurveyControllerIT doesn't match Surefire's default name patterns, so include it explicitly
+      - name: Build and run unit + integration tests
+        run: |
+          mvn -B -ntp verify -Dtest='*Test,*Tests,*IT' -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tee build.log
+          total=$( { grep -E '^\[(INFO|WARNING|ERROR)\] Tests run: .*Skipped: [0-9]+$' build.log || true; } | tail -1 | sed -E 's/^\[[A-Z]+\] //')
+          classes=$( { grep -oE 'Tests run: .* - in [A-Za-z0-9_.]+' build.log || true; } | sed -E 's/.*\.//' | sort -u | paste -sd, - | sed 's/,/, /g')
+          echo "::notice title=Survey Application tests::$total ($classes)"
+
+      - name: Start the application
+        run: |
+          nohup java -jar target/Survey-Application-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
+          for i in $(seq 1 60); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/surveys)" = "401" ] && exit 0
+            sleep 2
+          done
+          echo "::error::Application did not start"; exit 1
+
+      - name: Smoke-test endpoints
+        run: |
+          BASE=http://localhost:8080; pass=0; fail=0
+          check() {  # name, expected status, expected text ('' for none), curl args...
+            local name=$1 want=$2 text=$3; shift 3
+            local body; body=$(mktemp)
+            local got; got=$(curl -s -o "$body" -w '%{http_code}' "$@") || true  # e.g. connection refused -> 000
+            if [ "$got" = "$want" ] && { [ -z "$text" ] || grep -qF -- "$text" "$body"; }; then
+              echo "PASS  $name"; pass=$((pass + 1))
+            else
+              echo "::error::FAIL $name: HTTP $got (expected $want${text:+ with '$text'})"; head -c 400 "$body"; echo; fail=$((fail + 1))
+            fi
+          }
+          U=(-u user1:secret1); A=(-u admin1:secret1)
+          check "surveys require login"         401 ''                          $BASE/surveys
+          check "list surveys"                  200 '"id":"Survey1"'            "${U[@]}" $BASE/surveys
+          check "get one question"              200 '"correctAnswer":"Russia"'  "${U[@]}" $BASE/surveys/Survey1/questions/Question1
+          check "questions as XML"              200 '<correctAnswer>Russia</correctAnswer>' "${U[@]}" -H 'Accept: application/xml' $BASE/surveys/Survey1/questions
+          check "add a question"                201 ''                          "${U[@]}" -X POST -H 'Content-Type: application/json' -d '{"description":"Smallest number","correctAnswer":"1","options":["1","2"]}' $BASE/surveys/Survey1/questions
+          check "JPA users via Spring Data REST" 200 'Ranga'                    "${U[@]}" $BASE/users
+          check "users search by role"          200 'Satish'                    "${U[@]}" "$BASE/users/search/findByRole?role=Admin"
+          check "USER role blocked from /welcome" 403 ''                        "${U[@]}" $BASE/welcome
+          check "welcome message (admin)"       200 'Welcome message from application.properties' "${A[@]}" $BASE/welcome
+          check "prod profile configuration"    200 '"number":200'              "${A[@]}" $BASE/dynamic-configuration
+          check "actuator health"               200 '"status":"UP"'             "${A[@]}" $BASE/actuator/health
+          check "HAL explorer"                  200 ''                          "${A[@]}" -L $BASE/explorer/index.html
+          echo "::notice title=Survey Application smoke tests::$pass passed, $fail failed"
+          [ "$fail" -eq 0 ]
+
+      - name: Report errors
+        if: failure()
+        run: |
+          for f in build.log app.log; do
+            [ -f "$f" ] || continue
+            msg=$( { grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" || true; } | { grep -vE 'DEBUG|TRACE' || true; } | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
+            if [ -n "$msg" ]; then echo "::error title=$f::$msg"; fi
+          done
+
+      - name: Application log
+        if: always()
+        run: cat app.log || true
+
+  web-application:
+    name: Web Application
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash  # bash -eo pipefail, so a failing build piped through tee fails the step
+        working-directory: Web-Application-with-Spring-Boot
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: maven
+
+      - name: Build and run tests
+        run: |
+          mvn -B -ntp verify 2>&1 | tee build.log
+          total=$( { grep -E '^\[(INFO|WARNING|ERROR)\] Tests run: .*Skipped: [0-9]+$' build.log || true; } | tail -1 | sed -E 's/^\[[A-Z]+\] //')
+          classes=$( { grep -oE 'Tests run: .* - in [A-Za-z0-9_.]+' build.log || true; } | sed -E 's/.*\.//' | sort -u | paste -sd, - | sed 's/,/, /g')
+          echo "::notice title=Web Application tests::$total ($classes)"
+
+      # JSPs are only served when running from the project (not from the packaged jar)
+      - name: Start the application
+        run: |
+          nohup mvn -B -ntp spring-boot:run > app.log 2>&1 &
+          for i in $(seq 1 90); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/login)" = "200" ] && exit 0
+            sleep 2
+          done
+          echo "::error::Application did not start"; exit 1
+
+      - name: Smoke-test pages
+        run: |
+          BASE=http://localhost:8080; pass=0; fail=0; J=$(mktemp)
+          check() {  # name, expected status, expected text ('' for none), curl args...
+            local name=$1 want=$2 text=$3; shift 3
+            local body; body=$(mktemp)
+            local got; got=$(curl -s -o "$body" -w '%{http_code}' "$@") || true  # e.g. connection refused -> 000
+            if [ "$got" = "$want" ] && { [ -z "$text" ] || grep -qF -- "$text" "$body"; }; then
+              echo "PASS  $name"; pass=$((pass + 1))
+            else
+              echo "::error::FAIL $name: HTTP $got (expected $want${text:+ with '$text'})"; head -c 400 "$body"; echo; fail=$((fail + 1))
+            fi
+          }
+          check "login page"                   200 'name="username"'   $BASE/login
+          check "todos require login"          302 ''                  $BASE/list-todos
+          check "sign in"                      302 ''                  -c $J -b $J -d 'username=Harish&password=encapsulation' $BASE/login
+          check "welcome page"                 200 'Welcome Harish'    -b $J $BASE/
+          check "todo list has seed data"      200 'Learn Microservices' -b $J $BASE/list-todos
+          check "add-todo form"                200 'name="desc"'       -b $J $BASE/add-todo
+          for asset in $(curl -s -b $J $BASE/list-todos $BASE/add-todo | grep -oE '(src|href)="webjars/[^"]+"' | cut -d'"' -f2 | sort -u); do
+            check "loads $asset"               200 ''                  -b $J "$BASE/$asset"
+          done
+          check "add a todo"                   302 ''                  -b $J -d id=0 -d 'desc=Smoke test todo from CI' -d 'targetDate=31/12/2026' $BASE/add-todo
+          check "new todo is listed"           200 'Smoke test todo from CI' -b $J $BASE/list-todos
+          check "validation message"           200 'Enter at least 10 characters' -b $J -d id=0 -d 'desc=short' -d 'targetDate=31/12/2026' $BASE/add-todo
+          check "edit form"                    200 'Learn Microservices' -b $J "$BASE/update-todo?id=10001"
+          check "delete a todo"                302 ''                  -b $J "$BASE/delete-todo?id=10004"
+          if curl -s -b $J $BASE/list-todos | grep -qF 'Learn Kubernetes'; then echo "::error::FAIL deleted todo still listed"; fail=$((fail + 1)); else echo "PASS  deleted todo is gone"; pass=$((pass + 1)); fi
+          check "H2 console"                   200 ''                  -L $BASE/h2-console/
+          check "logout"                       302 ''                  -b $J $BASE/logout
+          echo "::notice title=Web Application smoke tests::$pass passed, $fail failed"
+          [ "$fail" -eq 0 ]
+
+      - name: Browser check (jQuery, Bootstrap, date picker)
+        working-directory: ${{ runner.temp }}
+        run: |
+          # puppeteer downloads its own Chrome, so this doesn't depend on what the runner image ships
+          npm install --no-save --no-audit --no-fund puppeteer@24 || { echo "::error::npm install puppeteer failed"; exit 1; }
+          cat > ui-check.js <<'EOF'
+          const puppeteer = require('puppeteer');
+          const BASE = 'http://localhost:8080';
+          let stage = 'starting the browser';
+          const trail = [];  // recent network activity, reported if the check crashes
+          (async () => {
+            const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+            const browserVersion = await browser.version();
+            const page = await browser.newPage();
+            const problems = [];
+            let watching = false;  // only report problems once logged in
+            // Spring Security's built-in login page links CSS from external CDNs; only load the app's own resources
+            await page.setRequestInterception(true);
+            page.on('request', r => {
+              const local = r.url().startsWith(BASE);
+              trail.push(`${local ? 'request' : 'blocked'} ${r.method()} ${r.url()}`);
+              local ? r.continue() : r.abort();
+            });
+            page.on('requestfinished', r => trail.push(`done ${r.response() && r.response().status()} ${r.url()}`));
+            page.on('requestfailed', r => trail.push(`failed ${r.url()} ${r.failure() && r.failure().errorText}`));
+            page.on('pageerror', e => watching && problems.push(`JS error: ${e.message}`));
+            page.on('console', m => watching && m.type() === 'error' && problems.push(`console error: ${m.text()}`));
+            page.on('response', r => watching && r.status() >= 400 && !r.url().endsWith('/favicon.ico') && problems.push(`HTTP ${r.status()} ${r.url()}`));
+
+            stage = 'opening the login page';
+            await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
+            await page.type('#username', 'Harish');
+            await page.type('#password', 'encapsulation');
+            stage = 'signing in';
+            await Promise.all([page.waitForNavigation(), page.click('button[type=submit]')]);
+            watching = true;
+
+            stage = 'opening the todo list';
+
+            await page.goto(`${BASE}/list-todos`, { waitUntil: 'networkidle0' });
+            const info = await page.evaluate(() => ({
+              jquery: window.jQuery && jQuery.fn.jquery,
+              bootstrap: window.jQuery && jQuery.fn.tooltip && jQuery.fn.tooltip.Constructor.VERSION,
+              css: getComputedStyle(document.querySelector('.btn-success')).backgroundColor === 'rgb(92, 184, 92)',
+            }));
+            console.log(`jQuery ${info.jquery}, Bootstrap JS ${info.bootstrap}, Bootstrap CSS applied: ${info.css}`);
+            if (!info.jquery) problems.push('jQuery did not load');
+            if (!info.bootstrap) problems.push('Bootstrap JS did not load');
+            if (!info.css) problems.push('Bootstrap CSS was not applied');
+
+            stage = 'opening the add-todo page';
+            await page.goto(`${BASE}/add-todo`, { waitUntil: 'networkidle0' });
+            stage = 'using the date picker';
+            await page.click('#targetDate');
+            const opened = await page.waitForSelector('.datepicker', { visible: true, timeout: 5000 }).then(() => true, () => false);
+            if (!opened) problems.push('Date picker did not open');
+            const picked = await page.evaluate(() => {
+              const day = document.querySelector('.datepicker td.day:not(.old):not(.new)');
+              if (day) day.click();
+              return document.querySelector('#targetDate').value;
+            });
+            console.log(`Date picker opened: ${opened}, value after picking a day: ${picked}`);
+            if (!/^\d{2}\/\d{2}\/\d{4}$/.test(picked)) problems.push(`Unexpected date value '${picked}'`);
+
+            stage = 'submitting the todo form';
+            await page.click('#desc');  // clicking elsewhere closes the date picker, which otherwise covers the Add button
+            await page.waitForSelector('.datepicker', { hidden: true, timeout: 5000 }).catch(() => problems.push('Date picker did not close'));
+            await page.$eval('#desc', el => { el.value = ''; });
+            await page.type('#desc', 'Added through the browser check');
+            await Promise.all([page.waitForNavigation(), page.click('button[type=submit]')]);
+            if (!(await page.content()).includes('Added through the browser check')) problems.push('Todo submitted through the form was not listed');
+
+            await browser.close();
+            if (problems.length) { problems.forEach(p => console.log(`::error::${p}`)); process.exit(1); }
+            console.log(`::notice title=Browser check (${browserVersion})::jQuery ${info.jquery}, Bootstrap ${info.bootstrap}, CSS applied, date picker picked ${picked}, todo added through the form`);
+          })().catch(e => {
+            console.log(`::error title=Browser check crashed while ${stage}::${e.message}%0A${trail.slice(-15).join('%0A')}`);
+            process.exit(1);
+          });
+          EOF
+          status=0; node ui-check.js > ui-check.log 2>&1 || status=$?
+          cat ui-check.log
+          if [ "$status" -ne 0 ] && ! grep -q '^::error' ui-check.log; then
+            echo "::error title=Browser check failed (node $(node --version))::$(tail -c 2500 ui-check.log | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')"
+          fi
+          exit "$status"
+
+      - name: Report errors
+        if: failure()
+        run: |
+          for f in build.log app.log; do
+            [ -f "$f" ] || continue
+            msg=$( { grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" || true; } | { grep -vE 'DEBUG|TRACE' || true; } | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
+            if [ -n "$msg" ]; then echo "::error title=$f::$msg"; fi
+          done
+
+      - name: Application log
+        if: always()
+        run: cat app.log || true
