@@ -25,15 +25,24 @@ jobs:
       run:
         working-directory: Mockito
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '11'
           cache: maven
 
       - name: Build and run tests
-        run: mvn -B -ntp verify
+        run: mvn -B -ntp verify 2>&1 | tee build.log
+
+      - name: Report errors
+        if: failure()
+        run: |
+          for f in build.log app.log; do
+            [ -f "$f" ] || continue
+            msg=$(grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" | grep -vE 'DEBUG|TRACE' | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
+            if [ -n "$msg" ]; then echo "::error title=$f::$msg"; fi
+          done
 
   survey-application:
     name: Survey Application
@@ -42,8 +51,8 @@ jobs:
       run:
         working-directory: Survey-Application
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '11'
@@ -51,7 +60,7 @@ jobs:
 
       # SurveyControllerIT doesn't match Surefire's default name patterns, so include it explicitly
       - name: Build and run unit + integration tests
-        run: mvn -B -ntp verify -Dtest='*Test,*Tests,*IT' -Dsurefire.failIfNoSpecifiedTests=false
+        run: mvn -B -ntp verify -Dtest='*Test,*Tests,*IT' -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tee build.log
 
       - name: Start the application
         run: |
@@ -64,15 +73,15 @@ jobs:
 
       - name: Smoke-test endpoints
         run: |
-          BASE=http://localhost:8080; fail=0
+          BASE=http://localhost:8080; pass=0; fail=0
           check() {  # name, expected status, expected text ('' for none), curl args...
             local name=$1 want=$2 text=$3; shift 3
             local body; body=$(mktemp)
             local got; got=$(curl -s -o "$body" -w '%{http_code}' "$@")
             if [ "$got" = "$want" ] && { [ -z "$text" ] || grep -qF -- "$text" "$body"; }; then
-              echo "PASS  $name"
+              echo "PASS  $name"; pass=$((pass + 1))
             else
-              echo "::error::FAIL $name: HTTP $got (expected $want${text:+ with '$text'})"; head -c 400 "$body"; echo; fail=1
+              echo "::error::FAIL $name: HTTP $got (expected $want${text:+ with '$text'})"; head -c 400 "$body"; echo; fail=$((fail + 1))
             fi
           }
           U=(-u user1:secret1); A=(-u admin1:secret1)
@@ -88,7 +97,17 @@ jobs:
           check "prod profile configuration"    200 '"number":200'              "${A[@]}" $BASE/dynamic-configuration
           check "actuator health"               200 '"status":"UP"'             "${A[@]}" $BASE/actuator/health
           check "HAL explorer"                  200 ''                          "${A[@]}" -L $BASE/explorer/index.html
-          exit $fail
+          echo "::notice title=Survey Application smoke tests::$pass passed, $fail failed"
+          [ "$fail" -eq 0 ]
+
+      - name: Report errors
+        if: failure()
+        run: |
+          for f in build.log app.log; do
+            [ -f "$f" ] || continue
+            msg=$(grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" | grep -vE 'DEBUG|TRACE' | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
+            if [ -n "$msg" ]; then echo "::error title=$f::$msg"; fi
+          done
 
       - name: Application log
         if: always()
@@ -101,15 +120,15 @@ jobs:
       run:
         working-directory: Web-Application-with-Spring-Boot
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '11'
           cache: maven
 
       - name: Build and run tests
-        run: mvn -B -ntp verify
+        run: mvn -B -ntp verify 2>&1 | tee build.log
 
       # JSPs are only served when running from the project (not from the packaged jar)
       - name: Start the application
@@ -123,15 +142,15 @@ jobs:
 
       - name: Smoke-test pages
         run: |
-          BASE=http://localhost:8080; fail=0; J=$(mktemp)
+          BASE=http://localhost:8080; pass=0; fail=0; J=$(mktemp)
           check() {  # name, expected status, expected text ('' for none), curl args...
             local name=$1 want=$2 text=$3; shift 3
             local body; body=$(mktemp)
             local got; got=$(curl -s -o "$body" -w '%{http_code}' "$@")
             if [ "$got" = "$want" ] && { [ -z "$text" ] || grep -qF -- "$text" "$body"; }; then
-              echo "PASS  $name"
+              echo "PASS  $name"; pass=$((pass + 1))
             else
-              echo "::error::FAIL $name: HTTP $got (expected $want${text:+ with '$text'})"; head -c 400 "$body"; echo; fail=1
+              echo "::error::FAIL $name: HTTP $got (expected $want${text:+ with '$text'})"; head -c 400 "$body"; echo; fail=$((fail + 1))
             fi
           }
           check "login page"                   200 'name="username"'   $BASE/login
@@ -148,16 +167,17 @@ jobs:
           check "validation message"           200 'Enter at least 10 characters' -b $J -d id=0 -d 'desc=short' -d 'targetDate=31/12/2026' $BASE/add-todo
           check "edit form"                    200 'Learn Microservices' -b $J "$BASE/update-todo?id=10001"
           check "delete a todo"                302 ''                  -b $J "$BASE/delete-todo?id=10004"
-          if curl -s -b $J $BASE/list-todos | grep -qF 'Learn Kubernetes'; then echo "::error::FAIL deleted todo still listed"; fail=1; else echo "PASS  deleted todo is gone"; fi
+          if curl -s -b $J $BASE/list-todos | grep -qF 'Learn Kubernetes'; then echo "::error::FAIL deleted todo still listed"; fail=$((fail + 1)); else echo "PASS  deleted todo is gone"; pass=$((pass + 1)); fi
           check "H2 console"                   200 ''                  -L $BASE/h2-console/
           check "logout"                       302 ''                  -b $J $BASE/logout
-          exit $fail
+          echo "::notice title=Web Application smoke tests::$pass passed, $fail failed"
+          [ "$fail" -eq 0 ]
 
       - name: Browser check (jQuery, Bootstrap, date picker)
         working-directory: ${{ runner.temp }}
-        env:
-          CHROME_PATH: /usr/bin/google-chrome
         run: |
+          CHROME_PATH=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)
+          export CHROME_PATH
           npm install --no-save --silent puppeteer-core@24 > /dev/null
           cat > ui-check.js <<'EOF'
           const puppeteer = require('puppeteer-core');
@@ -166,7 +186,10 @@ jobs:
             const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, args: ['--no-sandbox'] });
             const page = await browser.newPage();
             const problems = [];
-            let watching = false;  // Spring Security's login page pulls CSS from external CDNs, so start watching after login
+            let watching = false;  // only report problems once logged in
+            // Spring Security's built-in login page links CSS from external CDNs; only load the app's own resources
+            await page.setRequestInterception(true);
+            page.on('request', r => (r.url().startsWith(BASE) ? r.continue() : r.abort()));
             page.on('pageerror', e => watching && problems.push(`JS error: ${e.message}`));
             page.on('console', m => watching && m.type() === 'error' && problems.push(`console error: ${m.text()}`));
             page.on('response', r => watching && r.status() >= 400 && !r.url().endsWith('/favicon.ico') && problems.push(`HTTP ${r.status()} ${r.url()}`));
@@ -207,10 +230,19 @@ jobs:
 
             await browser.close();
             if (problems.length) { problems.forEach(p => console.log(`::error::${p}`)); process.exit(1); }
-            console.log('Browser check passed');
+            console.log(`::notice title=Browser check::jQuery ${info.jquery}, Bootstrap ${info.bootstrap}, CSS applied, date picker picked ${picked}, todo added through the form`);
           })().catch(e => { console.log(`::error::Browser check crashed: ${e.message}`); process.exit(1); });
           EOF
           node ui-check.js
+
+      - name: Report errors
+        if: failure()
+        run: |
+          for f in build.log app.log; do
+            [ -f "$f" ] || continue
+            msg=$(grep -E '\[ERROR\]|Caused by:|APPLICATION FAILED|Exception:|FAILURE' "$f" | grep -vE 'DEBUG|TRACE' | head -40 | cut -c1-300 | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')
+            if [ -n "$msg" ]; then echo "::error title=$f::$msg"; fi
+          done
 
       - name: Application log
         if: always()
