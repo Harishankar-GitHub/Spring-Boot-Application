@@ -1,0 +1,217 @@
+name: Build and test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  mockito:
+    name: Mockito
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Mockito
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: maven
+
+      - name: Build and run tests
+        run: mvn -B -ntp verify
+
+  survey-application:
+    name: Survey Application
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Survey-Application
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: maven
+
+      # SurveyControllerIT doesn't match Surefire's default name patterns, so include it explicitly
+      - name: Build and run unit + integration tests
+        run: mvn -B -ntp verify -Dtest='*Test,*Tests,*IT' -Dsurefire.failIfNoSpecifiedTests=false
+
+      - name: Start the application
+        run: |
+          nohup java -jar target/Survey-Application-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
+          for i in $(seq 1 60); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/surveys)" = "401" ] && exit 0
+            sleep 2
+          done
+          echo "::error::Application did not start"; exit 1
+
+      - name: Smoke-test endpoints
+        run: |
+          BASE=http://localhost:8080; fail=0
+          check() {  # name, expected status, expected text ('' for none), curl args...
+            local name=$1 want=$2 text=$3; shift 3
+            local body; body=$(mktemp)
+            local got; got=$(curl -s -o "$body" -w '%{http_code}' "$@")
+            if [ "$got" = "$want" ] && { [ -z "$text" ] || grep -qF -- "$text" "$body"; }; then
+              echo "PASS  $name"
+            else
+              echo "::error::FAIL $name: HTTP $got (expected $want${text:+ with '$text'})"; head -c 400 "$body"; echo; fail=1
+            fi
+          }
+          U=(-u user1:secret1); A=(-u admin1:secret1)
+          check "surveys require login"         401 ''                          $BASE/surveys
+          check "list surveys"                  200 '"id":"Survey1"'            "${U[@]}" $BASE/surveys
+          check "get one question"              200 '"correctAnswer":"Russia"'  "${U[@]}" $BASE/surveys/Survey1/questions/Question1
+          check "questions as XML"              200 '<correctAnswer>Russia</correctAnswer>' "${U[@]}" -H 'Accept: application/xml' $BASE/surveys/Survey1/questions
+          check "add a question"                201 ''                          "${U[@]}" -X POST -H 'Content-Type: application/json' -d '{"description":"Smallest number","correctAnswer":"1","options":["1","2"]}' $BASE/surveys/Survey1/questions
+          check "JPA users via Spring Data REST" 200 'Ranga'                    "${U[@]}" $BASE/users
+          check "users search by role"          200 'Satish'                    "${U[@]}" "$BASE/users/search/findByRole?role=Admin"
+          check "USER role blocked from /welcome" 403 ''                        "${U[@]}" $BASE/welcome
+          check "welcome message (admin)"       200 'Welcome message from application.properties' "${A[@]}" $BASE/welcome
+          check "prod profile configuration"    200 '"number":200'              "${A[@]}" $BASE/dynamic-configuration
+          check "actuator health"               200 '"status":"UP"'             "${A[@]}" $BASE/actuator/health
+          check "HAL explorer"                  200 ''                          "${A[@]}" -L $BASE/explorer/index.html
+          exit $fail
+
+      - name: Application log
+        if: always()
+        run: cat app.log || true
+
+  web-application:
+    name: Web Application
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Web-Application-with-Spring-Boot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: maven
+
+      - name: Build and run tests
+        run: mvn -B -ntp verify
+
+      # JSPs are only served when running from the project (not from the packaged jar)
+      - name: Start the application
+        run: |
+          nohup mvn -B -ntp spring-boot:run > app.log 2>&1 &
+          for i in $(seq 1 90); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/login)" = "200" ] && exit 0
+            sleep 2
+          done
+          echo "::error::Application did not start"; exit 1
+
+      - name: Smoke-test pages
+        run: |
+          BASE=http://localhost:8080; fail=0; J=$(mktemp)
+          check() {  # name, expected status, expected text ('' for none), curl args...
+            local name=$1 want=$2 text=$3; shift 3
+            local body; body=$(mktemp)
+            local got; got=$(curl -s -o "$body" -w '%{http_code}' "$@")
+            if [ "$got" = "$want" ] && { [ -z "$text" ] || grep -qF -- "$text" "$body"; }; then
+              echo "PASS  $name"
+            else
+              echo "::error::FAIL $name: HTTP $got (expected $want${text:+ with '$text'})"; head -c 400 "$body"; echo; fail=1
+            fi
+          }
+          check "login page"                   200 'name="username"'   $BASE/login
+          check "todos require login"          302 ''                  $BASE/list-todos
+          check "sign in"                      302 ''                  -c $J -b $J -d 'username=Harish&password=encapsulation' $BASE/login
+          check "welcome page"                 200 'Welcome Harish'    -b $J $BASE/
+          check "todo list has seed data"      200 'Learn Microservices' -b $J $BASE/list-todos
+          check "add-todo form"                200 'name="desc"'       -b $J $BASE/add-todo
+          for asset in $(curl -s -b $J $BASE/list-todos $BASE/add-todo | grep -oE '(src|href)="webjars/[^"]+"' | cut -d'"' -f2 | sort -u); do
+            check "loads $asset"               200 ''                  -b $J "$BASE/$asset"
+          done
+          check "add a todo"                   302 ''                  -b $J -d id=0 -d 'desc=Smoke test todo from CI' -d 'targetDate=31/12/2026' $BASE/add-todo
+          check "new todo is listed"           200 'Smoke test todo from CI' -b $J $BASE/list-todos
+          check "validation message"           200 'Enter at least 10 characters' -b $J -d id=0 -d 'desc=short' -d 'targetDate=31/12/2026' $BASE/add-todo
+          check "edit form"                    200 'Learn Microservices' -b $J "$BASE/update-todo?id=10001"
+          check "delete a todo"                302 ''                  -b $J "$BASE/delete-todo?id=10004"
+          if curl -s -b $J $BASE/list-todos | grep -qF 'Learn Kubernetes'; then echo "::error::FAIL deleted todo still listed"; fail=1; else echo "PASS  deleted todo is gone"; fi
+          check "H2 console"                   200 ''                  -L $BASE/h2-console/
+          check "logout"                       302 ''                  -b $J $BASE/logout
+          exit $fail
+
+      - name: Browser check (jQuery, Bootstrap, date picker)
+        working-directory: ${{ runner.temp }}
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          npm install --no-save --silent puppeteer-core@24 > /dev/null
+          cat > ui-check.js <<'EOF'
+          const puppeteer = require('puppeteer-core');
+          const BASE = 'http://localhost:8080';
+          (async () => {
+            const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, args: ['--no-sandbox'] });
+            const page = await browser.newPage();
+            const problems = [];
+            let watching = false;  // Spring Security's login page pulls CSS from external CDNs, so start watching after login
+            page.on('pageerror', e => watching && problems.push(`JS error: ${e.message}`));
+            page.on('console', m => watching && m.type() === 'error' && problems.push(`console error: ${m.text()}`));
+            page.on('response', r => watching && r.status() >= 400 && !r.url().endsWith('/favicon.ico') && problems.push(`HTTP ${r.status()} ${r.url()}`));
+
+            await page.goto(`${BASE}/login`);
+            await page.type('#username', 'Harish');
+            await page.type('#password', 'encapsulation');
+            await Promise.all([page.waitForNavigation(), page.click('button[type=submit]')]);
+            watching = true;
+
+            await page.goto(`${BASE}/list-todos`, { waitUntil: 'networkidle0' });
+            const info = await page.evaluate(() => ({
+              jquery: window.jQuery && jQuery.fn.jquery,
+              bootstrap: window.jQuery && jQuery.fn.tooltip && jQuery.fn.tooltip.Constructor.VERSION,
+              css: getComputedStyle(document.querySelector('.btn-success')).backgroundColor === 'rgb(92, 184, 92)',
+            }));
+            console.log(`jQuery ${info.jquery}, Bootstrap JS ${info.bootstrap}, Bootstrap CSS applied: ${info.css}`);
+            if (!info.jquery) problems.push('jQuery did not load');
+            if (!info.bootstrap) problems.push('Bootstrap JS did not load');
+            if (!info.css) problems.push('Bootstrap CSS was not applied');
+
+            await page.goto(`${BASE}/add-todo`, { waitUntil: 'networkidle0' });
+            await page.click('#targetDate');
+            const opened = await page.waitForSelector('.datepicker', { visible: true, timeout: 5000 }).then(() => true, () => false);
+            if (!opened) problems.push('Date picker did not open');
+            const picked = await page.evaluate(() => {
+              const day = document.querySelector('.datepicker td.day:not(.old):not(.new)');
+              if (day) day.click();
+              return document.querySelector('#targetDate').value;
+            });
+            console.log(`Date picker opened: ${opened}, value after picking a day: ${picked}`);
+            if (!/^\d{2}\/\d{2}\/\d{4}$/.test(picked)) problems.push(`Unexpected date value '${picked}'`);
+
+            await page.$eval('#desc', el => { el.value = ''; });
+            await page.type('#desc', 'Added through the browser check');
+            await Promise.all([page.waitForNavigation(), page.click('button[type=submit]')]);
+            if (!(await page.content()).includes('Added through the browser check')) problems.push('Todo submitted through the form was not listed');
+
+            await browser.close();
+            if (problems.length) { problems.forEach(p => console.log(`::error::${p}`)); process.exit(1); }
+            console.log('Browser check passed');
+          })().catch(e => { console.log(`::error::Browser check crashed: ${e.message}`); process.exit(1); });
+          EOF
+          node ui-check.js
+
+      - name: Application log
+        if: always()
+        run: cat app.log || true
