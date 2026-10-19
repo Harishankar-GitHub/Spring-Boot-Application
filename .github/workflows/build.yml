@@ -182,23 +182,35 @@ jobs:
           cat > ui-check.js <<'EOF'
           const puppeteer = require('puppeteer-core');
           const BASE = 'http://localhost:8080';
+          let stage = 'starting the browser';
           (async () => {
             const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, args: ['--no-sandbox'] });
             const page = await browser.newPage();
             const problems = [];
+            const trail = [];  // recent network activity, reported if the check crashes
             let watching = false;  // only report problems once logged in
             // Spring Security's built-in login page links CSS from external CDNs; only load the app's own resources
             await page.setRequestInterception(true);
-            page.on('request', r => (r.url().startsWith(BASE) ? r.continue() : r.abort()));
+            page.on('request', r => {
+              const local = r.url().startsWith(BASE);
+              trail.push(`${local ? 'request' : 'blocked'} ${r.method()} ${r.url()}`);
+              local ? r.continue() : r.abort();
+            });
+            page.on('requestfinished', r => trail.push(`done ${r.response() && r.response().status()} ${r.url()}`));
+            page.on('requestfailed', r => trail.push(`failed ${r.url()} ${r.failure() && r.failure().errorText}`));
             page.on('pageerror', e => watching && problems.push(`JS error: ${e.message}`));
             page.on('console', m => watching && m.type() === 'error' && problems.push(`console error: ${m.text()}`));
             page.on('response', r => watching && r.status() >= 400 && !r.url().endsWith('/favicon.ico') && problems.push(`HTTP ${r.status()} ${r.url()}`));
 
-            await page.goto(`${BASE}/login`);
+            stage = 'opening the login page';
+            await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
             await page.type('#username', 'Harish');
             await page.type('#password', 'encapsulation');
+            stage = 'signing in';
             await Promise.all([page.waitForNavigation(), page.click('button[type=submit]')]);
             watching = true;
+
+            stage = 'opening the todo list';
 
             await page.goto(`${BASE}/list-todos`, { waitUntil: 'networkidle0' });
             const info = await page.evaluate(() => ({
@@ -211,7 +223,9 @@ jobs:
             if (!info.bootstrap) problems.push('Bootstrap JS did not load');
             if (!info.css) problems.push('Bootstrap CSS was not applied');
 
+            stage = 'opening the add-todo page';
             await page.goto(`${BASE}/add-todo`, { waitUntil: 'networkidle0' });
+            stage = 'using the date picker';
             await page.click('#targetDate');
             const opened = await page.waitForSelector('.datepicker', { visible: true, timeout: 5000 }).then(() => true, () => false);
             if (!opened) problems.push('Date picker did not open');
@@ -223,6 +237,7 @@ jobs:
             console.log(`Date picker opened: ${opened}, value after picking a day: ${picked}`);
             if (!/^\d{2}\/\d{2}\/\d{4}$/.test(picked)) problems.push(`Unexpected date value '${picked}'`);
 
+            stage = 'submitting the todo form';
             await page.$eval('#desc', el => { el.value = ''; });
             await page.type('#desc', 'Added through the browser check');
             await Promise.all([page.waitForNavigation(), page.click('button[type=submit]')]);
@@ -231,7 +246,10 @@ jobs:
             await browser.close();
             if (problems.length) { problems.forEach(p => console.log(`::error::${p}`)); process.exit(1); }
             console.log(`::notice title=Browser check::jQuery ${info.jquery}, Bootstrap ${info.bootstrap}, CSS applied, date picker picked ${picked}, todo added through the form`);
-          })().catch(e => { console.log(`::error::Browser check crashed: ${e.message}`); process.exit(1); });
+          })().catch(e => {
+            console.log(`::error title=Browser check crashed while ${stage}::${e.message}%0A${trail.slice(-15).join('%0A')}`);
+            process.exit(1);
+          });
           EOF
           node ui-check.js
 
