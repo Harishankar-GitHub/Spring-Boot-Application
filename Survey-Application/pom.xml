@@ -12,11 +12,16 @@
   the versions of dependencies. -->
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>2.6.2</version>
+		<version>2.7.18</version>
   </parent>
 
   <properties>
 		<java.version>11</java.version>
+		<!-- Newer patch releases than Spring Boot 2.7.18 manages, for security fixes -->
+		<spring-framework.version>5.3.39</spring-framework.version>
+		<tomcat.version>9.0.123</tomcat.version>
+		<logback.version>1.2.13</logback.version>
+		<snakeyaml.version>1.33</snakeyaml.version>
 	</properties>
 
   <dependencies>
