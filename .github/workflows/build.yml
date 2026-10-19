@@ -30,7 +30,11 @@ jobs:
           cache: maven
 
       - name: Build and run tests
-        run: mvn -B -ntp verify 2>&1 | tee build.log
+        run: |
+          mvn -B -ntp verify 2>&1 | tee build.log
+          total=$( { grep -E '^\[(INFO|WARNING|ERROR)\] Tests run: .*Skipped: [0-9]+$' build.log || true; } | tail -1 | sed -E 's/^\[[A-Z]+\] //')
+          classes=$( { grep -oE 'Tests run: .* - in [A-Za-z0-9_.]+' build.log || true; } | sed -E 's/.*\.//' | sort -u | paste -sd, - | sed 's/,/, /g')
+          echo "::notice title=Mockito tests::$total ($classes)"
 
       - name: Report errors
         if: failure()
@@ -58,7 +62,11 @@ jobs:
 
       # SurveyControllerIT doesn't match Surefire's default name patterns, so include it explicitly
       - name: Build and run unit + integration tests
-        run: mvn -B -ntp verify -Dtest='*Test,*Tests,*IT' -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tee build.log
+        run: |
+          mvn -B -ntp verify -Dtest='*Test,*Tests,*IT' -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tee build.log
+          total=$( { grep -E '^\[(INFO|WARNING|ERROR)\] Tests run: .*Skipped: [0-9]+$' build.log || true; } | tail -1 | sed -E 's/^\[[A-Z]+\] //')
+          classes=$( { grep -oE 'Tests run: .* - in [A-Za-z0-9_.]+' build.log || true; } | sed -E 's/.*\.//' | sort -u | paste -sd, - | sed 's/,/, /g')
+          echo "::notice title=Survey Application tests::$total ($classes)"
 
       - name: Start the application
         run: |
@@ -127,7 +135,11 @@ jobs:
           cache: maven
 
       - name: Build and run tests
-        run: mvn -B -ntp verify 2>&1 | tee build.log
+        run: |
+          mvn -B -ntp verify 2>&1 | tee build.log
+          total=$( { grep -E '^\[(INFO|WARNING|ERROR)\] Tests run: .*Skipped: [0-9]+$' build.log || true; } | tail -1 | sed -E 's/^\[[A-Z]+\] //')
+          classes=$( { grep -oE 'Tests run: .* - in [A-Za-z0-9_.]+' build.log || true; } | sed -E 's/.*\.//' | sort -u | paste -sd, - | sed 's/,/, /g')
+          echo "::notice title=Web Application tests::$total ($classes)"
 
       # JSPs are only served when running from the project (not from the packaged jar)
       - name: Start the application
