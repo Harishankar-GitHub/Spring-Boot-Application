@@ -47,3 +47,9 @@
 - Unit Tests with Spring Boot and Mockito - MockMvc Framework
 - Different between Unit Test and Integration Test
 - Basic Authentication with Spring Security - Custom password, Different roles etc.
+
+## Attribution
+
+This repository contains my practice code from the Spring Boot and Mockito courses by [in28minutes](https://www.in28minutes.com) (Ranga Karanam). The original course material, including its example code, belongs to its author.
+
+The [MIT license](LICENSE) in this repository applies only to my own notes, changes and additions, not to the original course material.
