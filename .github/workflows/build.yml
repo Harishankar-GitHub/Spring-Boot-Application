@@ -250,7 +250,12 @@ jobs:
             process.exit(1);
           });
           EOF
-          node ui-check.js
+          status=0; node ui-check.js > ui-check.log 2>&1 || status=$?
+          cat ui-check.log
+          if [ "$status" -ne 0 ] && ! grep -q '^::error' ui-check.log; then
+            echo "::error title=Browser check failed (node $(node --version))::$(tail -c 2500 ui-check.log | awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}')"
+          fi
+          exit "$status"
 
       - name: Report errors
         if: failure()
